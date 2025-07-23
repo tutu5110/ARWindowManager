@@ -12,19 +12,19 @@ public class PanelDraggable : MonoBehaviour, IPointerDownHandler, IPointerUpHand
     private bool hasTriggeredOverlap = false;
     private int triggeredIndex = -1;
 
-    // ÍÏ×§¼ì²âÏà¹Ø
+    // æ‹–æ‹½æ£€æµ‹ç›¸å…³
     public float detectionYMax = 0;
     public bool visualizeQuarter = false;
     [Range(0f, 1f)]
     public float draggableTopPercent = 0.1f;
 
-    public List<Transform> regions = new List<Transform>(); // Ö§³Ö¶à¸öregion
+    public List<Transform> regions = new List<Transform>(); // æ”¯æŒå¤šä¸ªregion
 
     private List<RectTransform> hotRegionRefs = new List<RectTransform>();
     private List<RectTransform> preview_panels = new List<RectTransform>();
     private RectTransform rectTransform;
 
-    // Êó±êÍ¼±ê
+    // é¼ æ ‡å›¾æ ‡
     public Texture2D dragCursor;
     public Vector2 cursorHotspot = Vector2.zero;
 
@@ -33,7 +33,7 @@ public class PanelDraggable : MonoBehaviour, IPointerDownHandler, IPointerUpHand
         mainCamera = Camera.main;
         rectTransform = GetComponent<RectTransform>();
 
-        // ×Ô¶¯²éÕÒÃ¿¸öregionÏÂµÄHotregion_x_actºÍpreview_x
+        // è‡ªåŠ¨æŸ¥æ‰¾æ¯ä¸ªregionä¸‹çš„Hotregion_x_actå’Œpreview_x
         hotRegionRefs.Clear();
         preview_panels.Clear();
 
@@ -119,7 +119,7 @@ public class PanelDraggable : MonoBehaviour, IPointerDownHandler, IPointerUpHand
         float z = mainCamera.WorldToScreenPoint(transform.position).z;
         Vector3 startWorld = mainCamera.ScreenToWorldPoint(new Vector3(dragStartMouseScreenPos.x, dragStartMouseScreenPos.y, z));
         Vector3 currWorld = mainCamera.ScreenToWorldPoint(new Vector3(eventData.position.x, eventData.position.y, z));
-        Vector3 worldDelta = (currWorld - startWorld) * 2;
+        Vector3 worldDelta = (currWorld - startWorld) * 6;
         transform.position = dragStartPanelPos + worldDelta;
 
         bool anyOverlap = false;
