@@ -11,20 +11,21 @@ public class PanelDraggable : MonoBehaviour, IPointerDownHandler, IPointerUpHand
     private bool isDragging = false;
     private bool hasTriggeredOverlap = false;
     private int triggeredIndex = -1;
+    private Vector3 dragStartWorldPos;
 
-    // ÊãñÊãΩÊ£ÄÊµãÁõ∏ÂÖ≥
+    // Õœ◊ßºÏ≤‚œ‡πÿ
     public float detectionYMax = 0;
     public bool visualizeQuarter = false;
     [Range(0f, 1f)]
     public float draggableTopPercent = 0.1f;
 
-    public List<Transform> regions = new List<Transform>(); // ÊîØÊåÅÂ§ö‰∏™region
+    public List<Transform> regions = new List<Transform>(); // ÷ß≥÷∂‡∏ˆregion
 
     private List<RectTransform> hotRegionRefs = new List<RectTransform>();
     private List<RectTransform> preview_panels = new List<RectTransform>();
     private RectTransform rectTransform;
 
-    // Èº†Ê†áÂõæÊ†á
+    //  Û±ÍÕº±Í
     public Texture2D dragCursor;
     public Vector2 cursorHotspot = Vector2.zero;
 
@@ -33,7 +34,7 @@ public class PanelDraggable : MonoBehaviour, IPointerDownHandler, IPointerUpHand
         mainCamera = Camera.main;
         rectTransform = GetComponent<RectTransform>();
 
-        // Ëá™Âä®Êü•ÊâæÊØè‰∏™region‰∏ãÁöÑHotregion_x_actÂíåpreview_x
+        // ◊‘∂Ø≤È’“√ø∏ˆregionœ¬µƒHotregion_x_act∫Õpreview_x
         hotRegionRefs.Clear();
         preview_panels.Clear();
 
@@ -61,11 +62,14 @@ public class PanelDraggable : MonoBehaviour, IPointerDownHandler, IPointerUpHand
         Vector2 localPoint;
         RectTransformUtility.ScreenPointToLocalPointInRectangle(rectTransform, eventData.position, mainCamera, out localPoint);
 
-        if (eventData.position.y > detectionYMax)
+        if (Input.mousePosition.y > detectionYMax)
         {
             isDragging = true;
             dragStartPanelPos = transform.position;
-            dragStartMouseScreenPos = eventData.position;
+
+            float z = mainCamera.WorldToScreenPoint(transform.position).z;
+            Vector3 screenMouse = new Vector3(Input.mousePosition.x, Input.mousePosition.y, z);
+            dragStartWorldPos = mainCamera.ScreenToWorldPoint(screenMouse);
 
             if (dragCursor)
                 Cursor.SetCursor(dragCursor, cursorHotspot, CursorMode.Auto);
@@ -115,11 +119,11 @@ public class PanelDraggable : MonoBehaviour, IPointerDownHandler, IPointerUpHand
     {
         if (!isDragging) return;
 
-        Vector2 deltaScreen = (Vector2)eventData.position - dragStartMouseScreenPos;
         float z = mainCamera.WorldToScreenPoint(transform.position).z;
-        Vector3 startWorld = mainCamera.ScreenToWorldPoint(new Vector3(dragStartMouseScreenPos.x, dragStartMouseScreenPos.y, z));
-        Vector3 currWorld = mainCamera.ScreenToWorldPoint(new Vector3(eventData.position.x, eventData.position.y, z));
-        Vector3 worldDelta = (currWorld - startWorld) * 6;
+        Vector3 currScreen = new Vector3(Input.mousePosition.x, Input.mousePosition.y, z);
+        Vector3 currWorld = mainCamera.ScreenToWorldPoint(currScreen);
+        Vector3 worldDelta = currWorld - dragStartWorldPos;
+
         transform.position = dragStartPanelPos + worldDelta;
 
         bool anyOverlap = false;
