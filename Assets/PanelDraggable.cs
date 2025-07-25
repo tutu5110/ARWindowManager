@@ -13,6 +13,19 @@ public class PanelDraggable : MonoBehaviour, IPointerDownHandler, IPointerUpHand
     private int triggeredIndex = -1;
     private Vector3 dragStartWorldPos;
 
+    public struct PanelState
+    {
+        public Transform parent;
+        public Vector3 position;
+        public Quaternion rotation;
+        public Vector3 localScale;
+        public Vector2 sizeDelta;
+        public Vector2 anchorMin, anchorMax, pivot;
+    }
+
+    private PanelState initialState;
+
+
     // 拖拽检测相关
     public float detectionYMax = 0;
     public bool visualizeQuarter = false;
@@ -20,6 +33,8 @@ public class PanelDraggable : MonoBehaviour, IPointerDownHandler, IPointerUpHand
     public float draggableTopPercent = 0.1f;
 
     public List<Transform> regions = new List<Transform>(); // 支持多个region
+    public List<RectTransform> panelList = new List<RectTransform>(); // 所有可swap的panel
+    private RectTransform swapTarget = null; // 拖拽结束时命中的panel
 
     private List<RectTransform> hotRegionRefs = new List<RectTransform>();
     private List<RectTransform> preview_panels = new List<RectTransform>();
@@ -60,6 +75,8 @@ public class PanelDraggable : MonoBehaviour, IPointerDownHandler, IPointerUpHand
     public void OnPointerDown(PointerEventData eventData)
     {
         Vector2 localPoint;
+        swapTarget = null;
+
         RectTransformUtility.ScreenPointToLocalPointInRectangle(rectTransform, eventData.position, mainCamera, out localPoint);
 
         if (Input.mousePosition.y > detectionYMax)
@@ -73,6 +90,20 @@ public class PanelDraggable : MonoBehaviour, IPointerDownHandler, IPointerUpHand
 
             if (dragCursor)
                 Cursor.SetCursor(dragCursor, cursorHotspot, CursorMode.Auto);
+
+            // 只存当前被拖panel的初始状态
+            initialState = new PanelState
+            {
+                parent = rectTransform.parent,
+                position = rectTransform.position,
+                rotation = rectTransform.rotation,
+                localScale = rectTransform.localScale,
+                sizeDelta = rectTransform.sizeDelta,
+                anchorMin = rectTransform.anchorMin,
+                anchorMax = rectTransform.anchorMax,
+                pivot = rectTransform.pivot
+            };
+
         }
         else
         {
@@ -159,6 +190,63 @@ public class PanelDraggable : MonoBehaviour, IPointerDownHandler, IPointerUpHand
             hasTriggeredOverlap = false;
             triggeredIndex = -1;
         }
+
+        // panel swap logic
+        swapTarget = null;
+        foreach (var p in panelList)
+        {
+            if (p == null || p == rectTransform) continue;
+            if (RectTransformWorldOverlap(rectTransform, p))
+            {
+                swapTarget = p;
+                Debug.Log("overlappppppppppppppppppp!!!!");
+                break; // 只swap第一个检测到的
+            }
+        }
+
+    }
+
+    void SwapPanels(RectTransform panelA, RectTransform panelB)
+    {
+        // parent
+        var parentA = panelA.parent;
+        var parentB = panelB.parent;
+
+        // 记录属性
+        var posA = panelA.position; var posB = panelB.position;
+        var rotA = panelA.rotation; var rotB = panelB.rotation;
+        var scaleA = panelA.localScale; var scaleB = panelB.localScale;
+        var sizeA = panelA.sizeDelta; var sizeB = panelB.sizeDelta;
+        var anchorMinA = panelA.anchorMin; var anchorMinB = panelB.anchorMin;
+        var anchorMaxA = panelA.anchorMax; var anchorMaxB = panelB.anchorMax;
+        var pivotA = panelA.pivot; var pivotB = panelB.pivot;
+
+        // 互换parent
+        panelA.SetParent(parentB, true);
+        panelB.SetParent(parentA, true);
+
+        // 互换transform
+        panelA.position = posB; panelB.position = posA;
+        panelA.rotation = rotB; panelB.rotation = rotA;
+        panelA.localScale = scaleB; panelB.localScale = scaleA;
+
+        // 互换RectTransform
+        panelA.sizeDelta = sizeB; panelB.sizeDelta = sizeA;
+        panelA.anchorMin = anchorMinB; panelB.anchorMin = anchorMinA;
+        panelA.anchorMax = anchorMaxB; panelB.anchorMax = anchorMaxA;
+        panelA.pivot = pivotB; panelB.pivot = pivotA;
+    }
+
+    void RestorePanel(RectTransform panel, PanelState state)
+    {
+        panel.SetParent(state.parent, true);
+        panel.position = state.position;
+        panel.rotation = state.rotation;
+        panel.localScale = state.localScale;
+        panel.sizeDelta = state.sizeDelta;
+        panel.anchorMin = state.anchorMin;
+        panel.anchorMax = state.anchorMax;
+        panel.pivot = state.pivot;
     }
 
     public void OnPointerUp(PointerEventData eventData)
@@ -185,6 +273,15 @@ public class PanelDraggable : MonoBehaviour, IPointerDownHandler, IPointerUpHand
                 tmp.x = 1f;
                 background.localScale = tmp;
             }
+        }
+
+        // 拖拽结束，如果swapTarget存在，就swap
+        if (swapTarget != null)
+        {
+            RestorePanel(rectTransform, initialState);
+
+            SwapPanels(rectTransform, swapTarget);
+            swapTarget = null;
         }
 
         isDragging = false;
