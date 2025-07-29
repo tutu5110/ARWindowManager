@@ -5,13 +5,14 @@ using System.Collections.Generic;
 
 public class PanelDraggable : MonoBehaviour, IPointerDownHandler, IPointerUpHandler, IDragHandler
 {
+    // --- Member Variables ---
     private Vector3 dragStartPanelPos;
-    private Vector2 dragStartMouseScreenPos;
     private Camera mainCamera;
     private bool isDragging = false;
     private bool hasTriggeredOverlap = false;
-    private int triggeredIndex = -1;
+    private int triggeredIndex = -1; // Encoded as regionIdx*10+subIdx
     private Vector3 dragStartWorldPos;
+    private bool overlapCooldown = false;
 
     public struct PanelState
     {
@@ -25,73 +26,138 @@ public class PanelDraggable : MonoBehaviour, IPointerDownHandler, IPointerUpHand
 
     private PanelState initialState;
 
-
-    // 拖拽检测相关
+    [Header("Drag Configuration")]
     public float detectionYMax = 0;
-    public bool visualizeQuarter = false;
-    [Range(0f, 1f)]
-    public float draggableTopPercent = 0.1f;
-
-    public List<Transform> regions = new List<Transform>(); // 支持多个region
-    public List<RectTransform> panelList = new List<RectTransform>(); // 所有可swap的panel
-    private RectTransform swapTarget = null; // 拖拽结束时命中的panel
-
-    private List<RectTransform> hotRegionRefs = new List<RectTransform>();
-    private List<RectTransform> preview_panels = new List<RectTransform>();
-    private RectTransform rectTransform;
-
-    // 鼠标图标
     public Texture2D dragCursor;
     public Vector2 cursorHotspot = Vector2.zero;
 
+    [Header("Object References")]
+    public List<Transform> regions = new List<Transform>();
+    public List<RectTransform> panelList = new List<RectTransform>();
+
+    private RectTransform rectTransform;
+    private RectTransform swapTarget = null;
+
+    // Dictionaries for panel visuals
+    private Dictionary<RectTransform, Image> panelBackgrounds = new Dictionary<RectTransform, Image>();
+    private Dictionary<RectTransform, Color> panelOriginalColors = new Dictionary<RectTransform, Color>();
+
+    // Lists for hot regions and previews
+    private List<Image> allSubHotRegionBackgrounds = new List<Image>();
+    private List<List<RectTransform>> hotRegionRefsList = new List<List<RectTransform>>();
+    private List<List<RectTransform>> previewPanelsList = new List<List<RectTransform>>();
+    private List<RectTransform> preview_swaps = new List<RectTransform>();
+
     void Start()
     {
+        if (EventSystem.current != null)
+        {
+            EventSystem.current.pixelDragThreshold = 1;
+        }
+
         mainCamera = Camera.main;
         rectTransform = GetComponent<RectTransform>();
 
-        // 自动查找每个region下的Hotregion_x_act和preview_x
-        hotRegionRefs.Clear();
-        preview_panels.Clear();
+        hotRegionRefsList.Clear();
+        previewPanelsList.Clear();
+        preview_swaps.Clear();
 
         for (int i = 0; i < regions.Count; i++)
         {
-            string hotName = $"Hotregion_{i + 1}_act";
-            string previewName = $"preview_{i + 1}";
+            var hotList = new List<RectTransform>();
+            var previewList = new List<RectTransform>();
 
-            Transform hot = regions[i] != null ? regions[i].Find(hotName) : null;
-            if (hot != null)
-                hotRegionRefs.Add(hot.GetComponent<RectTransform>());
-            else
-                hotRegionRefs.Add(null);
+            string[] hotSuffix = { "act", "sub1", "sub2", "sub3", "sub4" };
+            string[] previewSuffix = { "", "_sub1", "_sub2", "_sub3", "_sub4" };
 
-            Transform preview = regions[i] != null ? regions[i].Find(previewName) : null;
-            if (preview != null)
-                preview_panels.Add(preview.GetComponent<RectTransform>());
+            for (int k = 0; k < hotSuffix.Length; k++)
+            {
+                string hotName = $"Hotregion_{i + 1}_{hotSuffix[k]}";
+                Transform hot = regions[i]?.Find(hotName);
+                hotList.Add(hot ? hot.GetComponent<RectTransform>() : null);
+
+                string previewName = $"preview_{i + 1}{previewSuffix[k]}";
+                Transform preview = regions[i]?.Find(previewName);
+                previewList.Add(preview ? preview.GetComponent<RectTransform>() : null);
+            }
+
+            hotRegionRefsList.Add(hotList);
+            previewPanelsList.Add(previewList);
+
+            Transform swap = regions[i]?.Find("swap_prev");
+            preview_swaps.Add(swap ? swap.GetComponent<RectTransform>() : null);
+        }
+
+        foreach (var panel in panelList)
+        {
+            var bg = panel.Find("Background");
+            if (bg != null)
+            {
+                var img = bg.GetComponent<Image>();
+                if (img != null)
+                {
+                    panelBackgrounds[panel] = img;
+                    panelOriginalColors[panel] = img.color;
+                }
+            }
+        }
+
+        for (int i = 0; i < hotRegionRefsList.Count; i++)
+        {
+            foreach (var hotRect in hotRegionRefsList[i])
+            {
+                if (hotRect != null)
+                {
+                    var bgTrans = hotRect.Find("Background");
+                    if (bgTrans != null)
+                    {
+                        var img = bgTrans.GetComponent<Image>();
+                        if (img != null)
+                            allSubHotRegionBackgrounds.Add(img);
+                    }
+                }
+            }
+        }
+    }
+
+    void Update()
+    {
+        if (isDragging) return;
+
+        Vector2 pointerPos = Input.mousePosition;
+
+        foreach (var panel in panelList)
+        {
+            if (!panelBackgrounds.ContainsKey(panel)) continue;
+
+            bool isInside = RectTransformUtility.ScreenPointToLocalPointInRectangle(
+                panel, pointerPos, mainCamera, out Vector2 localPoint) && panel.rect.Contains(localPoint);
+
+            var img = panelBackgrounds[panel];
+            if (isInside)
+            {
+                Color baseColor = panelOriginalColors[panel];
+                float alpha = Mathf.Lerp(100f / 255f, 166f / 255f, Mathf.PingPong(Time.time * 1.2f, 1f));
+                img.color = new Color(baseColor.r, baseColor.g, baseColor.b, alpha);
+            }
             else
-                preview_panels.Add(null);
+            {
+                img.color = panelOriginalColors[panel];
+            }
         }
     }
 
     public void OnPointerDown(PointerEventData eventData)
     {
-        Vector2 localPoint;
-        swapTarget = null;
-
-        RectTransformUtility.ScreenPointToLocalPointInRectangle(rectTransform, eventData.position, mainCamera, out localPoint);
-
-        if (Input.mousePosition.y > detectionYMax)
+        if (eventData.position.y > detectionYMax)
         {
             isDragging = true;
             dragStartPanelPos = transform.position;
-
-            float z = mainCamera.WorldToScreenPoint(transform.position).z;
-            Vector3 screenMouse = new Vector3(Input.mousePosition.x, Input.mousePosition.y, z);
-            dragStartWorldPos = mainCamera.ScreenToWorldPoint(screenMouse);
+            dragStartWorldPos = eventData.pointerPressRaycast.worldPosition;
 
             if (dragCursor)
                 Cursor.SetCursor(dragCursor, cursorHotspot, CursorMode.Auto);
 
-            // 只存当前被拖panel的初始状态
             initialState = new PanelState
             {
                 parent = rectTransform.parent,
@@ -103,12 +169,161 @@ public class PanelDraggable : MonoBehaviour, IPointerDownHandler, IPointerUpHand
                 anchorMax = rectTransform.anchorMax,
                 pivot = rectTransform.pivot
             };
+        }
+    }
 
+    public void OnDrag(PointerEventData eventData)
+    {
+        if (!isDragging) return;
+
+        transform.position = dragStartPanelPos + (eventData.pointerCurrentRaycast.worldPosition - dragStartWorldPos);
+
+        if (overlapCooldown)
+        {
+            if (!CheckAnyOverlap(out _, out _))
+            {
+                overlapCooldown = false;
+            }
+            return;
+        }
+
+        bool anyOverlap = CheckAnyOverlap(out int regionIdx, out int subIdx);
+
+        UpdatePreviewHighlight(regionIdx, subIdx, anyOverlap);
+        ResetAllHotregionAlphas();
+
+        if (anyOverlap && (regionIdx >= 0 && subIdx >= 0))
+        {
+            if (!hasTriggeredOverlap || triggeredIndex != regionIdx * 10 + subIdx)
+            {
+                hasTriggeredOverlap = true;
+                triggeredIndex = regionIdx * 10 + subIdx;
+            }
+            HighlightHotregion(regionIdx, subIdx);
         }
         else
         {
-            isDragging = false;
-            Cursor.SetCursor(null, Vector2.zero, CursorMode.Auto);
+            hasTriggeredOverlap = false;
+            triggeredIndex = -1;
+        }
+
+        HandlePanelSwap();
+    }
+
+    public void OnPointerUp(PointerEventData eventData)
+    {
+        if (!isDragging) return;
+
+        // --- THIS IS THE CORRECTED LOGIC ---
+
+        // 1. Finalize position if dropped on a hot region
+        if (hasTriggeredOverlap && triggeredIndex >= 0)
+        {
+            int regionIdx = triggeredIndex / 10;
+            int subIdx = triggeredIndex % 10;
+
+            if (regionIdx < previewPanelsList.Count && subIdx < previewPanelsList[regionIdx].Count)
+            {
+                RectTransform previewRect = previewPanelsList[regionIdx][subIdx];
+                if (previewRect != null)
+                {
+                    // Snap to the preview panel's transform
+                    RestorePanel(rectTransform, new PanelState
+                    {
+                        parent = previewRect.parent,
+                        position = previewRect.position,
+                        rotation = previewRect.rotation,
+                        localScale = previewRect.localScale,
+                        sizeDelta = previewRect.sizeDelta,
+                        anchorMin = previewRect.anchorMin,
+                        anchorMax = previewRect.anchorMax,
+                        pivot = previewRect.pivot
+                    });
+                    overlapCooldown = true;
+                }
+            }
+        }
+        // 2. Else, finalize panel swap if a target exists
+        else if (swapTarget != null)
+        {
+            // The logic here swaps the initial state of the dragged panel
+            // with the current state of the target panel.
+            SwapPanels(rectTransform, swapTarget);
+        }
+
+        // 3. If neither of the above, DO NOTHING. The panel now stays where you dropped it.
+        // The incorrect 'else' block that restored the panel has been removed.
+
+        // --- Cleanup ---
+        isDragging = false;
+        hasTriggeredOverlap = false;
+        triggeredIndex = -1;
+        swapTarget = null;
+
+        // Hide all previews
+        foreach (var previewList in previewPanelsList)
+        {
+            foreach (var preview in previewList)
+            {
+                if (preview != null) preview.gameObject.SetActive(false);
+            }
+        }
+        foreach (var preview in preview_swaps)
+        {
+            if (preview != null) preview.gameObject.SetActive(false);
+        }
+
+        Cursor.SetCursor(null, Vector2.zero, CursorMode.Auto);
+    }
+
+    #region Helper Methods
+
+    private bool CheckAnyOverlap(out int regionIdx, out int subIdx)
+    {
+        for (int i = 0; i < hotRegionRefsList.Count; i++)
+        {
+            for (int k = 0; k < hotRegionRefsList[i].Count; k++)
+            {
+                var hotRect = hotRegionRefsList[i][k];
+                if (hotRect != null && RectTransformWorldOverlap(this.rectTransform, hotRect))
+                {
+                    regionIdx = i;
+                    subIdx = k;
+                    return true;
+                }
+            }
+        }
+        regionIdx = -1;
+        subIdx = -1;
+        return false;
+    }
+
+    private void HandlePanelSwap()
+    {
+        swapTarget = null;
+        foreach (var p in panelList)
+        {
+            if (p == null || p == rectTransform) continue;
+
+            if (RectTransformWorldOverlap(rectTransform, p))
+            {
+                swapTarget = p;
+                int swapIdx = panelList.IndexOf(p);
+                int myIdx = panelList.IndexOf(rectTransform);
+
+                for (int j = 0; j < preview_swaps.Count; j++)
+                {
+                    if (preview_swaps[j] != null)
+                        preview_swaps[j].gameObject.SetActive(j == swapIdx || j == myIdx);
+                }
+                return;
+            }
+        }
+
+        foreach (var preview in preview_swaps)
+        {
+            if (preview != null)
+                preview.gameObject.SetActive(false);
         }
     }
 
@@ -146,98 +361,68 @@ public class PanelDraggable : MonoBehaviour, IPointerDownHandler, IPointerUpHand
         return overlap;
     }
 
-    public void OnDrag(PointerEventData eventData)
+    private void UpdatePreviewHighlight(int regionIdx, int subIdx, bool anyOverlap)
     {
-        if (!isDragging) return;
-
-        float z = mainCamera.WorldToScreenPoint(transform.position).z;
-        Vector3 currScreen = new Vector3(Input.mousePosition.x, Input.mousePosition.y, z);
-        Vector3 currWorld = mainCamera.ScreenToWorldPoint(currScreen);
-        Vector3 worldDelta = currWorld - dragStartWorldPos;
-
-        transform.position = dragStartPanelPos + worldDelta;
-
-        bool anyOverlap = false;
-        int hitIdx = -1;
-        for (int i = 0; i < hotRegionRefs.Count; i++)
+        for (int i = 0; i < previewPanelsList.Count; i++)
         {
-            if (hotRegionRefs[i] != null && RectTransformWorldOverlap(this.rectTransform, hotRegionRefs[i]))
+            for (int k = 0; k < previewPanelsList[i].Count; k++)
             {
-                anyOverlap = true;
-                hitIdx = i;
-                break;
+                if (previewPanelsList[i][k] != null)
+                    previewPanelsList[i][k].gameObject.SetActive(i == regionIdx && k == subIdx && anyOverlap);
             }
         }
-
-        if (anyOverlap && hitIdx >= 0)
-        {
-            for (int j = 0; j < preview_panels.Count; j++)
-                if (preview_panels[j] != null)
-                    preview_panels[j].gameObject.SetActive(j == hitIdx);
-
-            if (!hasTriggeredOverlap || triggeredIndex != hitIdx)
-            {
-                Debug.Log($"Activating preview {hitIdx + 1}...");
-                hasTriggeredOverlap = true;
-                triggeredIndex = hitIdx;
-            }
-        }
-        else
-        {
-            for (int j = 0; j < preview_panels.Count; j++)
-                if (preview_panels[j] != null)
-                    preview_panels[j].gameObject.SetActive(false);
-            hasTriggeredOverlap = false;
-            triggeredIndex = -1;
-        }
-
-        // panel swap logic
-        swapTarget = null;
-        foreach (var p in panelList)
-        {
-            if (p == null || p == rectTransform) continue;
-            if (RectTransformWorldOverlap(rectTransform, p))
-            {
-                swapTarget = p;
-                Debug.Log("overlappppppppppppppppppp!!!!");
-                break; // 只swap第一个检测到的
-            }
-        }
-
     }
 
-    void SwapPanels(RectTransform panelA, RectTransform panelB)
+    private void ResetAllHotregionAlphas()
     {
-        // parent
-        var parentA = panelA.parent;
-        var parentB = panelB.parent;
-
-        // 记录属性
-        var posA = panelA.position; var posB = panelB.position;
-        var rotA = panelA.rotation; var rotB = panelB.rotation;
-        var scaleA = panelA.localScale; var scaleB = panelB.localScale;
-        var sizeA = panelA.sizeDelta; var sizeB = panelB.sizeDelta;
-        var anchorMinA = panelA.anchorMin; var anchorMinB = panelB.anchorMin;
-        var anchorMaxA = panelA.anchorMax; var anchorMaxB = panelB.anchorMax;
-        var pivotA = panelA.pivot; var pivotB = panelB.pivot;
-
-        // 互换parent
-        panelA.SetParent(parentB, true);
-        panelB.SetParent(parentA, true);
-
-        // 互换transform
-        panelA.position = posB; panelB.position = posA;
-        panelA.rotation = rotB; panelB.rotation = rotA;
-        panelA.localScale = scaleB; panelB.localScale = scaleA;
-
-        // 互换RectTransform
-        panelA.sizeDelta = sizeB; panelB.sizeDelta = sizeA;
-        panelA.anchorMin = anchorMinB; panelB.anchorMin = anchorMinA;
-        panelA.anchorMax = anchorMaxB; panelB.anchorMax = anchorMaxA;
-        panelA.pivot = pivotB; panelB.pivot = pivotA;
+        foreach (var img in allSubHotRegionBackgrounds)
+        {
+            Color c = img.color;
+            c.a = 59f / 255f;
+            img.color = c;
+        }
     }
 
-    void RestorePanel(RectTransform panel, PanelState state)
+    private void HighlightHotregion(int regionIdx, int subIdx)
+    {
+        if (regionIdx < hotRegionRefsList.Count && subIdx < hotRegionRefsList[regionIdx].Count)
+        {
+            var hotRect = hotRegionRefsList[regionIdx][subIdx];
+            if (hotRect != null)
+            {
+                var bgTrans = hotRect.Find("Background");
+                if (bgTrans != null && bgTrans.TryGetComponent<Image>(out var img))
+                {
+                    Color c = img.color;
+                    c.a = 240f / 255f;
+                    img.color = c;
+                }
+            }
+        }
+    }
+
+    private void SwapPanels(RectTransform panelA, RectTransform panelB)
+    {
+        // Capture the target's current state
+        var stateB = new PanelState
+        {
+            parent = panelB.parent,
+            position = panelB.position,
+            rotation = panelB.rotation,
+            localScale = panelB.localScale,
+            sizeDelta = panelB.sizeDelta,
+            anchorMin = panelB.anchorMin,
+            anchorMax = panelB.anchorMax,
+            pivot = panelB.pivot
+        };
+
+        // panelA started at 'initialState'. So we move panelB to that state.
+        RestorePanel(panelB, this.initialState);
+        // And we move panelA to panelB's old state.
+        RestorePanel(panelA, stateB);
+    }
+
+    private void RestorePanel(RectTransform panel, PanelState state)
     {
         panel.SetParent(state.parent, true);
         panel.position = state.position;
@@ -249,44 +434,5 @@ public class PanelDraggable : MonoBehaviour, IPointerDownHandler, IPointerUpHand
         panel.pivot = state.pivot;
     }
 
-    public void OnPointerUp(PointerEventData eventData)
-    {
-        if (hasTriggeredOverlap && triggeredIndex >= 0 && preview_panels[triggeredIndex] != null)
-        {
-            RectTransform previewRect = preview_panels[triggeredIndex];
-            rectTransform.position = previewRect.position;
-            rectTransform.rotation = previewRect.rotation;
-            rectTransform.localScale = previewRect.localScale;
-            rectTransform.sizeDelta = previewRect.sizeDelta;
-            rectTransform.anchorMin = previewRect.anchorMin;
-            rectTransform.anchorMax = previewRect.anchorMax;
-            rectTransform.pivot = previewRect.pivot;
-
-            previewRect.gameObject.SetActive(false);
-
-            Transform background = transform.GetChild(0);
-            if (background != null)
-            {
-                Vector3 tmp = background.localScale;
-                tmp.x = 2f;
-                background.localScale = tmp;
-                tmp.x = 1f;
-                background.localScale = tmp;
-            }
-        }
-
-        // 拖拽结束，如果swapTarget存在，就swap
-        if (swapTarget != null)
-        {
-            RestorePanel(rectTransform, initialState);
-
-            SwapPanels(rectTransform, swapTarget);
-            swapTarget = null;
-        }
-
-        isDragging = false;
-        hasTriggeredOverlap = false;
-        triggeredIndex = -1;
-        Cursor.SetCursor(null, Vector2.zero, CursorMode.Auto);
-    }
+    #endregion
 }
