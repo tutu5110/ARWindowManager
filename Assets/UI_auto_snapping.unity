@@ -1566,18 +1566,14 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   detectionYMax: 0
-  visualizeQuarter: 1
-  draggableTopPercent: 0.1
+  dragCursor: {fileID: 2800000, guid: 0a9403ea162580346a243a01f7dea068, type: 3}
+  cursorHotspot: {x: 0, y: 0}
   regions:
   - {fileID: 881685396}
   - {fileID: 964916753}
   panelList:
   - {fileID: 374789100}
   - {fileID: 1461911001}
-  dragCursor: {fileID: 2800000, guid: 0a9403ea162580346a243a01f7dea068, type: 3}
-  cursorHotspot: {x: 0, y: 0}
-  normalColor: {r: 0.10062885, g: 0.10062885, b: 0.10062885, a: 1}
-  highlightColor: {r: 1, g: 1, b: 1, a: 1}
 --- !u!1 &377903355
 GameObject:
   m_ObjectHideFlags: 0
@@ -2015,7 +2011,7 @@ MonoBehaviour:
   m_HandleRect: {fileID: 1266915215}
   m_Direction: 0
   m_Value: 0
-  m_Size: 0.99999994
+  m_Size: 1
   m_NumberOfSteps: 0
   m_OnValueChanged:
     m_PersistentCalls:
@@ -6412,18 +6408,14 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   detectionYMax: 0
-  visualizeQuarter: 1
-  draggableTopPercent: 0.1
+  dragCursor: {fileID: 2800000, guid: 0a9403ea162580346a243a01f7dea068, type: 3}
+  cursorHotspot: {x: 0, y: 0}
   regions:
   - {fileID: 881685396}
   - {fileID: 964916753}
   panelList:
   - {fileID: 374789100}
   - {fileID: 1461911001}
-  dragCursor: {fileID: 2800000, guid: 0a9403ea162580346a243a01f7dea068, type: 3}
-  cursorHotspot: {x: 0, y: 0}
-  normalColor: {r: 1, g: 1, b: 1, a: 1}
-  highlightColor: {r: 1, g: 1, b: 1, a: 1}
 --- !u!114 &1461910995
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -7911,7 +7903,7 @@ MonoBehaviour:
   m_HandleRect: {fileID: 1489691211}
   m_Direction: 0
   m_Value: 0
-  m_Size: 0.99999994
+  m_Size: 1
   m_NumberOfSteps: 0
   m_OnValueChanged:
     m_PersistentCalls:
@@ -9003,7 +8995,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 33acc3b6f04fc124fa646203f42ed25f, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  m_Dimensions: {x: 1, y: 1, z: 1}
+  m_Dimensions: {x: 3, y: 3, z: 3}
   m_IsUniformScale: 0
   m_OutputConfiguration: {fileID: 11400000, guid: c141c6d819fe54420b1c524360b3915b, type: 2}
   m_CullingMask:
