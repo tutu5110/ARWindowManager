@@ -153,7 +153,18 @@ public class PanelDraggable : MonoBehaviour, IPointerDownHandler, IPointerUpHand
         {
             isDragging = true;
             dragStartPanelPos = transform.position;
-            dragStartWorldPos = eventData.pointerPressRaycast.worldPosition;
+            Vector3 worldPos = eventData.pointerPressRaycast.worldPosition;
+            // dragStartWorldPos = eventData.pointerPressRaycast.worldPosition;
+            if (worldPos == Vector3.zero)
+            {
+                RectTransformUtility.ScreenPointToWorldPointInRectangle(
+                    rectTransform,
+                    eventData.position,
+                    mainCamera,
+                    out worldPos
+                );
+            }
+            dragStartWorldPos = worldPos;
 
             if (dragCursor)
                 Cursor.SetCursor(dragCursor, cursorHotspot, CursorMode.Auto);
@@ -176,23 +187,49 @@ public class PanelDraggable : MonoBehaviour, IPointerDownHandler, IPointerUpHand
     {
         if (!isDragging) return;
 
-        transform.position = dragStartPanelPos + (eventData.pointerCurrentRaycast.worldPosition - dragStartWorldPos);
+        // transform.position = dragStartPanelPos + (eventData.pointerCurrentRaycast.worldPosition - dragStartWorldPos);
+        Debug.Log("Raycast world pos: " + eventData.pointerCurrentRaycast.worldPosition);
 
+        // 先尝试用 pointerCurrentRaycast.worldPosition
+        Vector3 curWorld = eventData.pointerCurrentRaycast.worldPosition;
+        // 如果得到 (0,0,0) 就回退到 ScreenPointToWorldPointInRectangle
+        if (curWorld == Vector3.zero)
+        {
+            // 用触发该事件的摄像机（Overlay 模式下为 null）
+            Camera cam = eventData.pressEventCamera;
+            // 投射到 rectTransform 所在平面
+            bool got = RectTransformUtility.ScreenPointToWorldPointInRectangle(
+                rectTransform,
+                eventData.position,
+                cam,
+                out curWorld
+            );
+            if (!got)
+            {
+                // 都拿不到就不更新位置，避免跳回原点
+                return;
+            }
+        }
+        Vector3 delta = curWorld - dragStartWorldPos;
+        Vector3 newPos = dragStartPanelPos + delta;
+        newPos.z = dragStartPanelPos.z;
+        transform.position = newPos;
+
+
+        // 四 冷却期内只检测何时退出
         if (overlapCooldown)
         {
             if (!CheckAnyOverlap(out _, out _))
-            {
                 overlapCooldown = false;
-            }
             return;
         }
 
+        // 五 普通的高亮与预览逻辑
         bool anyOverlap = CheckAnyOverlap(out int regionIdx, out int subIdx);
-
         UpdatePreviewHighlight(regionIdx, subIdx, anyOverlap);
         ResetAllHotregionAlphas();
 
-        if (anyOverlap && (regionIdx >= 0 && subIdx >= 0))
+        if (anyOverlap && regionIdx >= 0 && subIdx >= 0)
         {
             if (!hasTriggeredOverlap || triggeredIndex != regionIdx * 10 + subIdx)
             {
@@ -207,6 +244,7 @@ public class PanelDraggable : MonoBehaviour, IPointerDownHandler, IPointerUpHand
             triggeredIndex = -1;
         }
 
+        // 六 处理面板交换预览与交换逻辑
         HandlePanelSwap();
     }
 
