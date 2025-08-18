@@ -125,6 +125,7 @@ public class PreviewResizerVisionOS_V4 :
     private static Vector3 GetWorld(PointerEventData e, RectTransform refRect)
     {
         Vector3 w = e.pointerCurrentRaycast.worldPosition;
+   
         if (w == Vector3.zero)
         {
             if (!RectTransformUtility.ScreenPointToWorldPointInRectangle(

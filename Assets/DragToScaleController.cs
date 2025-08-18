@@ -1,4 +1,4 @@
-using UnityEngine;
+ï»¿using UnityEngine;
 using UnityEngine.EventSystems;
 
 public class DragToScaleController : MonoBehaviour, IBeginDragHandler, IDragHandler, IEndDragHandler
@@ -14,7 +14,6 @@ public class DragToScaleController : MonoBehaviour, IBeginDragHandler, IDragHand
     public Vector2 clampY = new Vector2(0.1f, 5f);
 
     [Header("Anchor/Pivot (world-locked)")]
-    [Tooltip("Ëø¶¨Õâ¸ö±¾µØµãµÄÊÀ½ç×ø±ê²»¶¯£»3D ÎïÌåÔ­µãÍ¨³£ÊÇ (0,0,0)¡£ÈôÏëÄ£Äâ×óÏÂ½Ç£¬¿ÉÌî (-width/2, -height/2, 0)¡£")]
     public Vector3 pivotLocal = Vector3.zero;
     public bool lockPivotWorld = true;
 
@@ -36,12 +35,10 @@ public class DragToScaleController : MonoBehaviour, IBeginDragHandler, IDragHand
         scale0 = targetObject.localScale;
         w2l0 = targetObject.worldToLocalMatrix;
 
-        // Æ½Ãæ£ºÓÃ t0 µÄ³¯Ïò & pivot ÊÀ½çµã
         Vector3 planeNormal0 = targetObject.rotation * Vector3.forward;
         Vector3 pivotW0 = targetObject.TransformPoint(pivotLocal);
         dragPlane0 = new Plane(planeNormal0, pivotW0);
 
-        // °Ñµ±Ç°Ö¸ÕëÍ¶µ½¹Ì¶¨Æ½Ãæ ¡ú ×ªµ½¡°ÆğÊ¼×ø±êÏµ¡±
         Vector3 pWorld0 = RayToPlane(cam, e.position, dragPlane0, pivotW0);
         pLocal0 = w2l0.MultiplyPoint3x4(pWorld0);
 
@@ -52,48 +49,31 @@ public class DragToScaleController : MonoBehaviour, IBeginDragHandler, IDragHand
     {
         if (!dragging || !targetObject) return;
 
-        // Ê¼ÖÕÍ¶Ó°µ½¡°¶³½áµÄÆ½Ãæ¡±£¬²¢ÓÃ¡°ÆğÊ¼×ø±êÏµ¡±¼ÆËã
         Vector3 pWorld = RayToPlane(cam, e.position, dragPlane0, pivotWorld0);
         Vector3 pLocal = w2l0.MultiplyPoint3x4(pWorld);
+        Vector3 dLocal = pLocal - pLocal0;
 
-        // --- ºËĞÄĞŞ¸Ä¿ªÊ¼ ---
+        float sx = scale0.x, sy = scale0.y;
 
-        // ¼ÆËãËõ·Å±ÈÀı¶ø²»ÊÇÎ»ÒÆÔöÁ¿
-        // To avoid division by zero, handle cases where the initial pointer position is at the origin.
-        float ratioX = (pLocal0.x != 0) ? pLocal.x / pLocal0.x : 1f;
-        float ratioY = (pLocal0.y != 0) ? pLocal.y / pLocal0.y : 1f;
-
-        float sx = scale0.x;
-        float sy = scale0.y;
-
+        // X æ–¹å‘ä¿æŒä¸å˜
         if (axes == Axes.X || axes == Axes.XY)
-            // ½«±ÈÀıÓ¦ÓÃµ½³õÊ¼Ëõ·ÅÖµÉÏ
-            sx = Mathf.Clamp(scale0.x * ratioX, clampX.x, clampX.y);
+            sx = Mathf.Clamp(scale0.x + dLocal.x * factorX, clampX.x, clampX.y);
 
-        if (axes == Axes.Y || axes == Axes.XY)
-            // ½«±ÈÀıÓ¦ÓÃµ½³õÊ¼Ëõ·ÅÖµÉÏ
-            sy = Mathf.Clamp(scale0.y * ratioY, clampY.x, clampY.y);
-
-        // Èç¹ûÊÇXY£¨Í³Ò»Ëõ·Å£©£¬È·±£±ÈÀıÒ»ÖÂ
-        if (axes == Axes.XY)
-        {
-            // Use the axis that has been dragged further to determine the uniform scale
-            float finalRatio = (Mathf.Abs(ratioX - 1f) > Mathf.Abs(ratioY - 1f)) ? ratioX : ratioY;
-            sx = Mathf.Clamp(scale0.x * finalRatio, clampX.x, clampX.y);
-            sy = Mathf.Clamp(scale0.y * finalRatio, clampY.x, clampY.y);
-        }
-
-        // --- ºËĞÄĞŞ¸Ä½áÊø ---
+        // Y æ–¹å‘ï¼šå½“ä¸”ä»…å½“åªçº¦æŸ Y æ—¶åå‘
+        if (axes == Axes.Y)
+            sy = Mathf.Clamp(scale0.y - dLocal.y * factorY, clampY.x, clampY.y);
+        else if (axes == Axes.XY)
+            sy = Mathf.Clamp(scale0.y + dLocal.y * factorY, clampY.x, clampY.y);
 
         targetObject.localScale = new Vector3(sx, sy, scale0.z);
 
-        // ¾ø¶ÔËø¶¨ pivot ÊÀ½ç×ø±ê£º²»ÔÊĞí×óÓÒ/ÉÏÏÂÆ¯ÒÆ
         if (lockPivotWorld)
         {
             Vector3 pivotWorldNow = targetObject.TransformPoint(pivotLocal);
             targetObject.position += (pivotWorld0 - pivotWorldNow);
         }
     }
+
 
     public void OnEndDrag(PointerEventData e) { dragging = false; }
 
