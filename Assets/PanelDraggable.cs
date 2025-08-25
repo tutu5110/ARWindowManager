@@ -46,6 +46,11 @@ public class PanelDraggable : MonoBehaviour, IPointerDownHandler, IPointerUpHand
     private List<Image> allSubHotRegionBackgrounds = new List<Image>();
     private List<List<RectTransform>> hotRegionRefsList = new List<List<RectTransform>>();
     private List<List<RectTransform>> previewPanelsList = new List<List<RectTransform>>();
+
+    private float previewInactiveAlpha = 0f;
+    private float previewActiveAlpha = 1f;
+    private List<List<Image>> previewBackgroundsList = new List<List<Image>>();
+
     private List<RectTransform> preview_swaps = new List<RectTransform>();
 
     void Start()
@@ -66,23 +71,51 @@ public class PanelDraggable : MonoBehaviour, IPointerDownHandler, IPointerUpHand
         {
             var hotList = new List<RectTransform>();
             var previewList = new List<RectTransform>();
+            var previewBgList = new List<Image>();
 
-            string[] hotSuffix = { "act", "sub1", "sub2", "sub3", "sub4" };
-            string[] previewSuffix = { "", "_sub1", "_sub2", "_sub3", "_sub4" };
+            string[] hotSuffix = { "WindowPanel/preview_parent/Container/Row_0/preview_sub1/Hotregion_sub1",
+                "WindowPanel/preview_parent/Container/Row_0/preview_sub2/Hotregion_sub2",
+                "WindowPanel/preview_parent/Container/Row_1/preview_sub3/Hotregion_sub3",
+                "WindowPanel/preview_parent/Container/Row_1/preview_sub4/Hotregion_sub4"};
+            string[] previewPaths = {
+                "WindowPanel/preview_parent/Container/Row_0/preview_sub1",
+                "WindowPanel/preview_parent/Container/Row_0/preview_sub2",
+                "WindowPanel/preview_parent/Container/Row_1/preview_sub3",
+                "WindowPanel/preview_parent/Container/Row_1/preview_sub4"
+            };
 
             for (int k = 0; k < hotSuffix.Length; k++)
             {
-                string hotName = $"Hotregion_{i + 1}_{hotSuffix[k]}";
+                string hotName = hotSuffix[k];
                 Transform hot = regions[i]?.Find(hotName);
-                hotList.Add(hot ? hot.GetComponent<RectTransform>() : null);
+                
+                if (hot != null)
+                    hotList.Add(hot.GetComponent<RectTransform>());
 
-                string previewName = $"preview_{i + 1}{previewSuffix[k]}";
-                Transform preview = regions[i]?.Find(previewName);
-                previewList.Add(preview ? preview.GetComponent<RectTransform>() : null);
+            }
+
+            for (int k = 0; k < previewPaths.Length; k++)
+            {
+                var t = regions[i]?.Find(previewPaths[k]);
+                if (t == null)
+                    continue;
+
+                    previewList.Add(t ? t.GetComponent<RectTransform>() : null);
+                Image bgImg = null;
+ 
+                    var bgT = t.Find("Background");
+                    if (bgT != null)
+                    {
+                        bgImg = bgT.GetComponent<Image>();
+                        // 不要拦截事件
+                        if (bgImg != null) bgImg.raycastTarget = false;
+                    }
+                previewBgList.Add(bgImg);
             }
 
             hotRegionRefsList.Add(hotList);
             previewPanelsList.Add(previewList);
+            previewBackgroundsList.Add(previewBgList);
 
             Transform swap = regions[i]?.Find("swap_prev");
             preview_swaps.Add(swap ? swap.GetComponent<RectTransform>() : null);
@@ -102,6 +135,7 @@ public class PanelDraggable : MonoBehaviour, IPointerDownHandler, IPointerUpHand
             }
         }
 
+
         for (int i = 0; i < hotRegionRefsList.Count; i++)
         {
             foreach (var hotRect in hotRegionRefsList[i])
@@ -119,6 +153,7 @@ public class PanelDraggable : MonoBehaviour, IPointerDownHandler, IPointerUpHand
             }
         }
     }
+
 
     void Update()
     {
@@ -188,7 +223,7 @@ public class PanelDraggable : MonoBehaviour, IPointerDownHandler, IPointerUpHand
         if (!isDragging) return;
 
         // transform.position = dragStartPanelPos + (eventData.pointerCurrentRaycast.worldPosition - dragStartWorldPos);
-        Debug.Log("Raycast world pos: " + eventData.pointerCurrentRaycast.worldPosition);
+       // Debug.Log("Raycast world pos: " + eventData.pointerCurrentRaycast.worldPosition);
 
         // 先尝试用 pointerCurrentRaycast.worldPosition
         Vector3 curWorld = eventData.pointerCurrentRaycast.worldPosition;
@@ -226,6 +261,7 @@ public class PanelDraggable : MonoBehaviour, IPointerDownHandler, IPointerUpHand
 
         // 五 普通的高亮与预览逻辑
         bool anyOverlap = CheckAnyOverlap(out int regionIdx, out int subIdx);
+        Debug.Log(anyOverlap);
         UpdatePreviewHighlight(regionIdx, subIdx, anyOverlap);
         ResetAllHotregionAlphas();
 
@@ -243,9 +279,6 @@ public class PanelDraggable : MonoBehaviour, IPointerDownHandler, IPointerUpHand
             hasTriggeredOverlap = false;
             triggeredIndex = -1;
         }
-
-        // 六 处理面板交换预览与交换逻辑
-        HandlePanelSwap();
     }
 
     public void OnPointerUp(PointerEventData eventData)
@@ -266,31 +299,12 @@ public class PanelDraggable : MonoBehaviour, IPointerDownHandler, IPointerUpHand
                 if (previewRect != null)
                 {
                     // Snap to the preview panel's transform
-                    RestorePanel(rectTransform, new PanelState
-                    {
-                        parent = previewRect.parent,
-                        position = previewRect.position,
-                        rotation = previewRect.rotation,
-                        localScale = previewRect.localScale,
-                        sizeDelta = previewRect.sizeDelta,
-                        anchorMin = previewRect.anchorMin,
-                        anchorMax = previewRect.anchorMax,
-                        pivot = previewRect.pivot
-                    });
+                    updatePanelPosition(rectTransform, previewRect);
                     overlapCooldown = true;
                 }
             }
         }
-        // 2. Else, finalize panel swap if a target exists
-        else if (swapTarget != null)
-        {
-            // The logic here swaps the initial state of the dragged panel
-            // with the current state of the target panel.
-            SwapPanels(rectTransform, swapTarget);
-        }
 
-        // 3. If neither of the above, DO NOTHING. The panel now stays where you dropped it.
-        // The incorrect 'else' block that restored the panel has been removed.
 
         // --- Cleanup ---
         isDragging = false;
@@ -298,23 +312,28 @@ public class PanelDraggable : MonoBehaviour, IPointerDownHandler, IPointerUpHand
         triggeredIndex = -1;
         swapTarget = null;
 
-        // Hide all previews
-        foreach (var previewList in previewPanelsList)
-        {
-            foreach (var preview in previewList)
-            {
-                if (preview != null) preview.gameObject.SetActive(false);
-            }
-        }
-        foreach (var preview in preview_swaps)
-        {
-            if (preview != null) preview.gameObject.SetActive(false);
-        }
+        SetAllPreviewBackgroundsAlpha(previewInactiveAlpha);
 
         Cursor.SetCursor(null, Vector2.zero, CursorMode.Auto);
     }
 
+
     #region Helper Methods
+    private void SetImageAlpha(Image img, float a)
+    {
+        if (img == null) return;
+        var c = img.color;
+        c.a = a;
+        img.color = c;
+    }
+
+    private void SetAllPreviewBackgroundsAlpha(float a)
+    {
+        for (int i = 0; i < previewBackgroundsList.Count; i++)
+            for (int k = 0; k < previewBackgroundsList[i].Count; k++)
+                SetImageAlpha(previewBackgroundsList[i][k], a);
+    }
+
 
     private bool CheckAnyOverlap(out int regionIdx, out int subIdx)
     {
@@ -336,35 +355,6 @@ public class PanelDraggable : MonoBehaviour, IPointerDownHandler, IPointerUpHand
         return false;
     }
 
-    private void HandlePanelSwap()
-    {
-        swapTarget = null;
-        foreach (var p in panelList)
-        {
-            if (p == null || p == rectTransform) continue;
-
-            if (RectTransformWorldOverlap(rectTransform, p))
-            {
-                swapTarget = p;
-                int swapIdx = panelList.IndexOf(p);
-                int myIdx = panelList.IndexOf(rectTransform);
-
-                for (int j = 0; j < preview_swaps.Count; j++)
-                {
-                    if (preview_swaps[j] != null)
-                        preview_swaps[j].gameObject.SetActive(j == swapIdx || j == myIdx);
-                }
-                return;
-            }
-        }
-
-        foreach (var preview in preview_swaps)
-        {
-            if (preview != null)
-                preview.gameObject.SetActive(false);
-        }
-    }
-
     void QuarterizeCorners(Vector3[] corners, float scale, float xOffset, float yOffset)
     {
         Vector3 leftTop = corners[1];
@@ -383,7 +373,7 @@ public class PanelDraggable : MonoBehaviour, IPointerDownHandler, IPointerUpHand
         a.GetWorldCorners(cornersA);
         b.GetWorldCorners(cornersB);
 
-        QuarterizeCorners(cornersA, 0.25f, 0, 0);
+       // QuarterizeCorners(cornersA, 0.25f, 0, 0);
         // AABB
         float axMin = Mathf.Min(cornersA[0].x, cornersA[1].x, cornersA[2].x, cornersA[3].x);
         float axMax = Mathf.Max(cornersA[0].x, cornersA[1].x, cornersA[2].x, cornersA[3].x);
@@ -401,15 +391,28 @@ public class PanelDraggable : MonoBehaviour, IPointerDownHandler, IPointerUpHand
 
     private void UpdatePreviewHighlight(int regionIdx, int subIdx, bool anyOverlap)
     {
-        for (int i = 0; i < previewPanelsList.Count; i++)
+        for (int i = 0; i < previewBackgroundsList.Count; i++)
         {
-            for (int k = 0; k < previewPanelsList[i].Count; k++)
+            for (int k = 0; k < previewBackgroundsList[i].Count; k++)
             {
-                if (previewPanelsList[i][k] != null)
-                    previewPanelsList[i][k].gameObject.SetActive(i == regionIdx && k == subIdx && anyOverlap);
+                var img = previewBackgroundsList[i][k];
+                if (img == null) continue;
+
+                float a = (i == regionIdx && k == subIdx && anyOverlap)
+                    ? previewActiveAlpha
+                    : previewInactiveAlpha;
+
+                // 避免每帧反复写
+                if (!Mathf.Approximately(img.color.a, a))
+                {
+                    var c = img.color;
+                    c.a = a;
+                    img.color = c;
+                }
             }
         }
     }
+
 
     private void ResetAllHotregionAlphas()
     {
@@ -460,16 +463,29 @@ public class PanelDraggable : MonoBehaviour, IPointerDownHandler, IPointerUpHand
         RestorePanel(panelA, stateB);
     }
 
+    private void updatePanelPosition(RectTransform panel, RectTransform target_zone) {
+        panel.position = target_zone.position;
+        panel.rotation = target_zone.rotation;
+
+        float w = target_zone.rect.width * 742.5380710659898f;
+        float h = target_zone.rect.height * 743.9328590697916f;
+
+        panel.SetSizeWithCurrentAnchors(RectTransform.Axis.Horizontal, w);
+        panel.SetSizeWithCurrentAnchors(RectTransform.Axis.Vertical, h);
+
+    }
     private void RestorePanel(RectTransform panel, PanelState state)
     {
-        panel.SetParent(state.parent, true);
+        //panel.SetParent(state.parent, true);
         panel.position = state.position;
         panel.rotation = state.rotation;
-        panel.localScale = state.localScale;
-        panel.sizeDelta = state.sizeDelta;
-        panel.anchorMin = state.anchorMin;
-        panel.anchorMax = state.anchorMax;
-        panel.pivot = state.pivot;
+  
+
+      // panel.localScale = state.localScale;
+       // panel.sizeDelta = state.sizeDelta;
+       // panel.anchorMin = state.anchorMin;
+       // panel.anchorMax = state.anchorMax;
+       // panel.pivot = state.pivot;
     }
 
     #endregion
