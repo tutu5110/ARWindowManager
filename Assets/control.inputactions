@@ -1,0 +1,45 @@
+{
+    "name": "control",
+    "maps": [
+        {
+            "name": "global",
+            "id": "2eab74f7-5e15-4239-b0b2-c4dff644daab",
+            "actions": [
+                {
+                    "name": "DoublePinch",
+                    "type": "Button",
+                    "id": "328c602b-835c-449c-976e-ca640a584cb7",
+                    "expectedControlType": "",
+                    "processors": "",
+                    "interactions": "MultiTap",
+                    "initialStateCheck": false
+                }
+            ],
+            "bindings": [
+                {
+                    "name": "",
+                    "id": "b54dee75-7b61-4b0d-8691-572f2816aceb",
+                    "path": "<OculusTrackingReference>/{PrimaryAction}",
+                    "interactions": "",
+                    "processors": "",
+                    "groups": "",
+                    "action": "DoublePinch",
+                    "isComposite": false,
+                    "isPartOfComposite": false
+                },
+                {
+                    "name": "",
+                    "id": "5d1ba073-e439-4f39-9b39-92a3f30694ed",
+                    "path": "<Keyboard>/space",
+                    "interactions": "",
+                    "processors": "",
+                    "groups": "",
+                    "action": "DoublePinch",
+                    "isComposite": false,
+                    "isPartOfComposite": false
+                }
+            ]
+        }
+    ],
+    "controlSchemes": []
+}
